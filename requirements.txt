@@ -1,0 +1,2 @@
+# No external dependencies required
+# This agent uses only built-in Python libraries
