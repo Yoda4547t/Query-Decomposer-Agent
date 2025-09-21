@@ -2,41 +2,102 @@
 
 [![Python](https://img.shields.io/badge/Python-3.7+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![No Dependencies](https://img.shields.io/badge/Dependencies-None-green.svg)](https://github.com/Yoda4547t/Query-Decomposer-Agent)
+[![Version](https://img.shields.io/badge/Version-2.0.0-brightgreen.svg)](https://github.com/Yoda4547t/Query-Decomposer-Agent)
 
-A general-purpose agent that decomposes complex queries into smaller sub-queries using rule-based and pattern matching approaches. Designed to work seamlessly with RAG (Retrieval-Augmented Generation) AI systems.
+A powerful query decomposition system that offers two approaches for breaking down complex queries:
 
-## 🚀 Features
+1. **LLM-based Decomposer** (New! Recommended) - Uses large language models (like LLaMA 3) for intelligent query decomposition
+2. **Rule-based Decomposer** (Original) - Uses pattern matching and rule-based approaches
 
+Both versions are designed to work seamlessly with RAG (Retrieval-Augmented Generation) AI systems and can be used based on your specific requirements.
+
+## Features
+
+### LLM-based Decomposer (New!)
+- **Intelligent Decomposition** - Uses advanced language models for context-aware query breakdown
+- **Natural Language Understanding** - Better handles complex, nuanced queries
+- **Adaptive Sub-query Generation** - Automatically adjusts the number and type of sub-queries based on query complexity
+- **RAG-Optimized** - Specifically designed to work with Retrieval-Augmented Generation systems
+- **Ollama Integration** - Seamlessly works with Ollama for local model inference
+- **Configurable** - Customize model, temperature, and other parameters
+
+### Rule-based Decomposer (Original)
 - **Domain-agnostic design** - Works with any domain (telecom, healthcare, finance, etc.)
-- **Multiple decomposition strategies** - Rule-based, entity-based, and intelligent decomposition
-- **RAG Integration Ready** - Perfect for RAG AI systems
-- **Dynamic sub-query generation** - Generates 5+ sub-queries based on query complexity
+- **Multiple decomposition strategies** - Rule-based, entity-based, and pattern matching
 - **No external dependencies** - Uses only built-in Python libraries
 - **Customizable entity patterns** - Easy to adapt for different domains
-- **Clear integration points** - Well-defined callbacks for retriever and LLM integration
+- **Deterministic** - Always produces the same output for the same input
 
-## 🔧 RAG Integration
+## RAG Integration
 
-This agent is specifically designed to work with RAG AI systems where:
+Both decomposers are specifically designed to work with RAG AI systems where:
 
 1. **Complex user queries** are decomposed into smaller, focused sub-queries
 2. **Each sub-query** is sent to a retrieval system to find relevant documents
 3. **Retrieved documents** are then processed by an LLM for final responses
 4. **The agent handles** the query decomposition step in the RAG pipeline
 
-## 📦 Installation
+### When to Use Which Version?
 
-No external dependencies required! This agent uses only built-in Python libraries.
+| Feature | LLM-based Decomposer | Rule-based Decomposer |
+|---------|----------------------|----------------------|
+| **Complexity Handling** | Excellent for complex, nuanced queries | Good for structured, predictable queries |
+| **Customization** | High (model parameters, prompts) | Medium (rules and patterns) |
+| **Performance** | Slower (requires model inference) | Faster (direct pattern matching) |
+| **Deterministic** | No (can vary with temperature) | Yes |
+| **Setup** | Requires Ollama/LMM setup | No external dependencies |
+| **Best For** | Production systems needing high accuracy | Simple use cases, edge devices |
 
-```bash
-git clone https://github.com/Yoda4547t/Query-Decomposer-Agent.git
-cd Query-Decomposer-Agent
+## Installation
+
+### Prerequisites
+- Python 3.7 or higher
+- For LLM-based decomposer: [Ollama](https://ollama.ai/) installed and running
+
+### Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/Yoda4547t/Query-Decomposer-Agent.git
+   cd Query-Decomposer-Agent
+   ```
+
+2. Install required dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+   
+   For LLM-based decomposer, also install:
+   ```bash
+   pip install requests langchain-community
+   ```
+
+3. (For LLM-based) Pull the desired model (e.g., LLaMA 3):
+   ```bash
+   ollama pull llama3:8b
+   ```
+
+## Quick Start
+
+### LLM-based Decomposer
+
+```python
+from query_decomposer_llm_agent import OllamaDecomposer
+
+# Initialize with default model (llama3:8b)
+decomposer = OllamaDecomposer()
+
+# Decompose a complex query
+result = decomposer("Compare 4G and 5G network performance in urban and rural areas")
+
+# Print results
+print(f"Original Query: {result.original_query}")
+print("\nSub-queries:")
+for i, subq in enumerate(result.sub_queries, 1):
+    print(f"  {i}. {subq}")
 ```
 
-## ⚡ Quick Start
-
-### Basic Usage
+### Rule-based Decomposer
 
 ```python
 from query_decomposer_agent import QueryDecomposerAgent
@@ -183,3 +244,44 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Built for RAG (Retrieval-Augmented Generation) AI systems
 - Designed to be domain-agnostic and easily customizable
 - No external dependencies for maximum portability
+
+## 🧠 LLM-based Query Decomposer Agent (LangChain + LLM)
+
+This agent uses LangChain and an LLM backend (Ollama by default, swappable) to decompose complex queries into sub-queries using an LLM prompt.
+
+- **File:** `query_decomposer_llm_agent.py`
+- **Default LLM:** Ollama (llama3), but you can swap in OpenAI, Anthropic, etc.
+- **LangChain Tool:** `QuerySplitterLLM` (modular, extensible)
+
+### Usage Example
+
+```python
+from query_decomposer_llm_agent import QueryDecomposerLLMAgent
+
+agent = QueryDecomposerLLMAgent()  # Uses Ollama/llama3 by default
+query = "Compare the revenue growth of Apple and Microsoft over the last 5 years and explain the key differences."
+result = agent.decompose(query)
+print(result)
+```
+
+**Sample Output:**
+```json
+{
+  "original_query": "Compare the revenue growth of Apple and Microsoft over the last 5 years and explain the key differences.",
+  "sub_queries": [
+    "Revenue growth of Apple over the last 5 years",
+    "Revenue growth of Microsoft over the last 5 years",
+    "Key differences in revenue growth between Apple and Microsoft over the last 5 years"
+  ]
+}
+```
+
+### Extensibility
+- Swap in any LangChain-compatible LLM (OpenAI, Anthropic, etc.)
+- Add more tools/agents (Retriever, Summarizer, etc.) as needed
+
+### Testing
+Run the file directly to see test queries and JSON output:
+```bash
+python query_decomposer_llm_agent.py
+```
