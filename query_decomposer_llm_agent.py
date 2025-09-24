@@ -1,4 +1,5 @@
 import json
+import re
 import requests
 import argparse
 from abc import ABC, abstractmethod
@@ -92,7 +93,7 @@ class OllamaDecomposer(BaseQueryDecomposer):
     def __init__(
         self, 
         model_name: str = "llama3:8b", 
-        temperature: float = 0.3,
+        temperature: float = 0.1,
         base_url: str = "http://localhost:11434"
     ):
         """Initialize the Ollama decomposer.
@@ -109,6 +110,7 @@ class OllamaDecomposer(BaseQueryDecomposer):
     
     def _call_model(self, prompt: str) -> str:
         """Call the Ollama API with the given prompt."""
+        print(f"⏳ Sending request to Ollama model '{self.model_name}'... (this may take up to 2 minutes)")
         try:
             response = requests.post(
                 self.api_url,
@@ -118,24 +120,26 @@ class OllamaDecomposer(BaseQueryDecomposer):
                     "temperature": self.temperature,
                     "stream": False
                 },
-                timeout=30
+                timeout=120  # Increased timeout to 120 seconds for local LLMs
             )
             response.raise_for_status()
+            print("✅ Received response from Ollama.")
             return response.json().get("response", "")
         except requests.exceptions.RequestException as e:
+            print(f"❌ Error communicating with Ollama: {e}")
             raise RuntimeError(f"Failed to call Ollama API: {str(e)}")
     
     def decompose(self, query: str, **kwargs) -> QueryDecompositionResult:
         """Decompose a query using the Ollama model."""
+        # Simplified prompt to generate fewer, more concise sub-queries.
         system_prompt = """You are an expert at breaking down complex queries into simpler sub-queries. 
-        Your task is to decompose the given query into smaller, independent questions that can be answered separately.
+        Your task is to decompose the given query into 2-4 smaller, independent questions that can be answered separately.
         
         Guidelines:
-        1. Each sub-query should be self-contained and answerable on its own
-        2. Maintain the original meaning and intent of the query
-        3. Break down complex questions into logical components
-        4. Number each sub-query
-        5. Keep the language clear and concise
+        1. Each sub-query should be self-contained and answerable on its own.
+        2. Maintain the original meaning and intent of the query.
+        3. Break down complex questions into logical components.
+        4. Number each sub-query.
         
         Example:
         Input: "What are the differences between Python and Java in terms of performance and syntax?"
@@ -149,7 +153,7 @@ class OllamaDecomposer(BaseQueryDecomposer):
         try:
             response = self._call_model(f"{system_prompt}\n\n{query}")
             
-            # Extract sub-queries from the response
+            # Simplified parsing for numbered lists.
             sub_queries = []
             for line in response.split('\n'):
                 line = line.strip()
@@ -158,7 +162,7 @@ class OllamaDecomposer(BaseQueryDecomposer):
                     if sub_query:
                         sub_queries.append(sub_query)
             
-            # If no sub-queries found, use the original query
+            # If no sub-queries found, use the original query as a fallback.
             if not sub_queries:
                 sub_queries = [query]
             
@@ -178,7 +182,8 @@ class OllamaDecomposer(BaseQueryDecomposer):
                 sub_queries=[query],
                 metadata={
                     "error": str(e),
-                    "decomposer": "ollama"
+                    "decomposer": "ollama",
+                    "fallback": True
                 }
             )
 
@@ -633,6 +638,49 @@ def parse_arguments():
     
     return parser.parse_args()
 
+def test_retrieval_optimization():
+    """Test function to demonstrate retrieval-optimized decomposition."""
+    print("🧪 Testing General-Purpose Retrieval-Optimized LLM Query Decomposer")
+    print("=" * 70)
+    
+    # Test queries covering different domains and types
+    test_queries = [
+        "explain why 5G is better than 4G",
+        "what is difference between 5G and 4G compared in last 3 months in goa",
+        "best restaurants in Paris for vegetarian food",
+        "how to learn Python programming for beginners",
+        "compare machine learning and traditional algorithms for data analysis",
+        "what are the health benefits of yoga and meditation",
+        "climate change effects on agriculture in developing countries",
+        "investment strategies for retirement planning"
+    ]
+    
+    try:
+        decomposer = OllamaDecomposer(temperature=0.2)  # Lower temperature for more focused output
+        
+        for i, query in enumerate(test_queries, 1):
+            print(f"\n🔍 Test {i}: {query}")
+            print("-" * 60)
+            
+            try:
+                result = decomposer.decompose(query)
+                print(f"✅ Generated {len(result.sub_queries)} retrieval-optimized sub-queries:")
+                
+                for j, sub_query in enumerate(result.sub_queries, 1):
+                    print(f"  {j}. {sub_query}")
+                    
+                print(f"\n📊 Optimization: {result.metadata.get('optimization', 'N/A')}")
+                
+            except Exception as e:
+                print(f"❌ Error processing query: {e}")
+                
+    except Exception as e:
+        print(f"❌ Failed to initialize decomposer: {e}")
+        print("\n💡 Make sure Ollama is running locally on port 11434")
+        print("   Install: https://ollama.ai/")
+        print("   Run: ollama serve")
+        print("   Pull a model: ollama pull llama3:8b")
+
 def main():
     """Main entry point for the query decomposer."""
     print("🚀 Starting Query Decomposer")
@@ -702,4 +750,10 @@ def main():
 
 
 if __name__ == "__main__":
-    exit(main())
+    import sys
+    
+    # Check if user wants to run retrieval optimization test
+    if len(sys.argv) > 1 and sys.argv[1] == "--test-retrieval":
+        test_retrieval_optimization()
+    else:
+        main()

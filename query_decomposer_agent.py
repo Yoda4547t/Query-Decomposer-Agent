@@ -2,9 +2,45 @@
 import re
 import json
 import time
-from typing import List, Dict, Any, Optional, Callable
 from dataclasses import dataclass
+from typing import List, Dict, Any, Optional, Callable
 from enum import Enum
+
+def simple_fuzzy_ratio(s1: str, s2: str) -> float:
+    """Simple string similarity ratio without external dependencies."""
+    s1, s2 = s1.lower(), s2.lower()
+
+    # Exact match
+    if s1 == s2:
+        return 100.0
+
+    # Calculate Levenshtein distance
+    def levenshtein_distance(s1, s2):
+        if len(s1) < len(s2):
+            return levenshtein_distance(s2, s1)
+
+        if len(s2) == 0:
+            return len(s1)
+
+        previous_row = range(len(s2) + 1)
+        for i, c1 in enumerate(s1):
+            current_row = [i + 1]
+            for j, c2 in enumerate(s2):
+                insertions = previous_row[j + 1] + 1
+                deletions = current_row[j] + 1
+                substitutions = previous_row[j] + (c1 != c2)
+                current_row.append(min(insertions, deletions, substitutions))
+            previous_row = current_row
+
+        return previous_row[-1]
+
+    max_len = max(len(s1), len(s2))
+    if max_len == 0:
+        return 100.0
+
+    distance = levenshtein_distance(s1, s2)
+    similarity = (max_len - distance) / max_len
+    return similarity * 100
 
 class QueryType(Enum):
     COMPARISON = "comparison"
@@ -91,19 +127,33 @@ class EntityDetector:
             'percentages': r'\b\d+(?:\.\d+)?%\b',
             'measurements': r'\b\d+(?:\.\d+)?\s*(?:mbps|gbps|ms|seconds?|minutes?|hours?|days?|weeks?|months?|years?)\b'
         }
-        
         self.entity_lists = {
             'comparison_keywords': [
                 'compare', 'comparison', 'vs', 'versus', 'between', 'and', 'versus',
-                'difference', 'contrast', 'relative', 'compared to', 'against'
+                'difference', 'contrast', 'relative', 'compared to', 'against',
+                'better', 'worse', 'superior', 'inferior', 'advantages', 'disadvantages'
             ],
             'list_keywords': [
                 'give me', 'show me', 'list', 'provide', 'tell me about', 'display',
-                'fetch', 'retrieve', 'get', 'find', 'search for', 'look up'
+                'fetch', 'retrieve', 'get', 'find', 'search for', 'look up',
+                'analyze', 'evaluate', 'assess', 'examine', 'investigate'
             ],
             'location_indicators': [
                 'in', 'at', 'for', 'across', 'within', 'near', 'around', 'throughout',
-                'covering', 'serving', 'operating in', 'available in'
+                'covering', 'serving', 'operating in', 'available in', 'between',
+                'urban', 'rural', 'city', 'metropolitan', 'suburban'
+            ],
+            'technologies': [
+                '4G', '5G', '3G', 'LTE', 'WiFi', 'Bluetooth', 'AI', 'ML', 'IoT',
+                'cloud', 'edge', 'blockchain', 'VR', 'AR', 'neural network', 'machine learning',
+                'artificial intelligence', 'deep learning', 'network', 'wireless', 'fiber',
+                'broadband', 'cellular', 'satellite', 'VoLTE', 'VoIP', 'SDN', 'NFV'
+            ],
+            'metrics': [
+                'performance', 'speed', 'latency', 'throughput', 'bandwidth', 'coverage',
+                'reliability', 'efficiency', 'cost', 'quality', 'accuracy', 'precision',
+                'scalability', 'availability', 'security', 'uptime', 'downtime', 'jitter',
+                'packet loss', 'signal strength', 'capacity', 'spectrum efficiency', 'QoS'
             ]
         }
         
@@ -132,6 +182,8 @@ class EntityDetector:
             'measurements': [],
             'comparison_terms': [],
             'list_terms': [],
+            'technologies': [],
+            'metrics': [],
             'custom_entities': []
         }
         
@@ -142,6 +194,8 @@ class EntityDetector:
         detected_entities['measurements'] = self._detect_measurements(text)
         detected_entities['comparison_terms'] = self._detect_comparison_terms(text)
         detected_entities['list_terms'] = self._detect_list_terms(text)
+        detected_entities['technologies'] = self._detect_technologies(text)
+        detected_entities['metrics'] = self._detect_metrics(text)
         detected_entities['custom_entities'] = self._detect_custom_entities(text)
         
         return detected_entities
@@ -263,6 +317,40 @@ class EntityDetector:
         
         return entities
     
+    def _detect_technologies(self, text: str) -> List[DetectedEntity]:
+        entities = []
+        text_lower = text.lower()
+        
+        for term in self.entity_lists['technologies']:
+            if term.lower() in text_lower:
+                start_pos = text_lower.find(term.lower())
+                entities.append(DetectedEntity(
+                    text=term,
+                    category='technology',
+                    start_pos=start_pos,
+                    end_pos=start_pos + len(term),
+                    confidence=1.0
+                ))
+        
+        return entities
+    
+    def _detect_metrics(self, text: str) -> List[DetectedEntity]:
+        entities = []
+        text_lower = text.lower()
+        
+        for term in self.entity_lists['metrics']:
+            if term.lower() in text_lower:
+                start_pos = text_lower.find(term.lower())
+                entities.append(DetectedEntity(
+                    text=term,
+                    category='metric',
+                    start_pos=start_pos,
+                    end_pos=start_pos + len(term),
+                    confidence=1.0
+                ))
+        
+        return entities
+    
     def _detect_custom_entities(self, text: str) -> List[DetectedEntity]:
         entities = []
         text_lower = text.lower()
@@ -284,16 +372,33 @@ class EntityDetector:
     
     def _is_common_word(self, word: str) -> bool:
         common_words = {
+            # Basic words
             'the', 'this', 'that', 'these', 'those', 'a', 'an', 'what', 'how',
             'when', 'where', 'why', 'who', 'which', 'and', 'or', 'but', 'in',
             'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'up', 'down',
             'out', 'off', 'over', 'under', 'again', 'further', 'then', 'once',
-            'compare', 'network', 'latency', 'between', 'last', 'months', 'give',
-            'me', 'call', 'drop', 'rate', 'coverage', 'spectrum', 'allocation',
-            'show', 'list', 'provide', 'tell', 'display', 'fetch', 'retrieve',
-            'get', 'find', 'search', 'look', 'difference', 'contrast', 'relative'
+            
+            # Query structure words
+            'compare', 'comparison', 'between', 'difference', 'explain', 'better', 
+            'than', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had',
+            'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might',
+            'can', 'must', 'shall', 'ought', 'need', 'want', 'like', 'love', 'hate',
+            
+            # Action words
+            'know', 'think', 'believe', 'feel', 'see', 'hear', 'say', 'tell', 
+            'speak', 'talk', 'ask', 'answer', 'show', 'list', 'provide', 'display',
+            'fetch', 'retrieve', 'get', 'find', 'search', 'look', 'give', 'take',
+            
+            # Time/measurement words that shouldn't be locations
+            'last', 'past', 'recent', 'current', 'next', 'future', 'months', 'years',
+            'days', 'weeks', 'hours', 'minutes', 'seconds', 'time', 'period',
+            
+            # Comparison words
+            'vs', 'versus', 'against', 'compared', 'contrast', 'relative', 'similar',
+            'different', 'same', 'equal', 'more', 'less', 'most', 'least', 'best',
+            'worst', 'good', 'bad', 'excellent', 'poor', 'high', 'low', 'fast', 'slow'
         }
-        return word.lower() in common_words
+        return word.lower().strip() in common_words
     
     def _remove_overlapping_entities(self, entities: List[DetectedEntity]) -> List[DetectedEntity]:
         if not entities:
@@ -330,6 +435,70 @@ class QueryDecomposer:
             DecompositionRule.TEMPORAL_DECOMPOSITION: self._decompose_by_time,
             DecompositionRule.SPATIAL_DECOMPOSITION: self._decompose_by_space
         }
+    
+    def _is_common_word(self, word: str) -> bool:
+        """Check if a word is a common query word that shouldn't be treated as an entity."""
+        common_words = {
+            # Basic words
+            'the', 'this', 'that', 'these', 'those', 'a', 'an', 'what', 'how',
+            'when', 'where', 'why', 'who', 'which', 'and', 'or', 'but', 'in',
+            'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'up', 'down',
+            'out', 'off', 'over', 'under', 'again', 'further', 'then', 'once',
+            
+            # Query structure words
+            'compare', 'comparison', 'between', 'difference', 'explain', 'better', 
+            'than', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had',
+            'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might',
+            'can', 'must', 'shall', 'ought', 'need', 'want', 'like', 'love', 'hate',
+            
+            # Action words
+            'know', 'think', 'believe', 'feel', 'see', 'hear', 'say', 'tell', 
+            'speak', 'talk', 'ask', 'answer', 'show', 'list', 'provide', 'display',
+            'fetch', 'retrieve', 'get', 'find', 'search', 'look', 'give', 'take',
+            
+            # Time/measurement words that shouldn't be locations
+            'last', 'past', 'recent', 'current', 'next', 'future', 'months', 'years',
+            'days', 'weeks', 'hours', 'minutes', 'seconds', 'time', 'period',
+            
+            # Comparison words
+            'vs', 'versus', 'against', 'compared', 'contrast', 'relative', 'similar',
+            'different', 'same', 'equal', 'more', 'less', 'most', 'least', 'best',
+            'worst', 'good', 'bad', 'excellent', 'poor', 'high', 'low', 'fast', 'slow'
+        }
+        return word.lower().strip() in common_words
+    
+    def _clean_sub_query(self, sub_query: str, original_query: str) -> str:
+        """Clean up a sub-query to make it more readable and useful."""
+        # Remove duplicate phrases from original query
+        for phrase in original_query.split()[:5]:  # Check first few words
+            if phrase.lower() in sub_query.lower() and sub_query.lower().count(phrase.lower()) > 1:
+                sub_query = sub_query.replace(phrase, '', 1)
+                
+        # Remove empty parentheses and extra spaces
+        sub_query = re.sub(r'\\(\\s*\\)', '', sub_query)
+        sub_query = re.sub(r'\\s+', ' ', sub_query).strip()
+        
+        # Capitalize first letter
+        if sub_query:
+            sub_query = sub_query[0].upper() + sub_query[1:]
+            
+        return sub_query if sub_query and len(sub_query.split()) > 2 else None
+        
+    def _is_quality_sub_query(self, sub_query: str, original_query: str) -> bool:
+        """Check if a sub-query is meaningful and different enough from the original."""
+        # Shouldn't be too similar to original
+        if simple_fuzzy_ratio(sub_query.lower(), original_query.lower()) > 80:
+            return False
+            
+        # Should have at least 3 words
+        if len(sub_query.split()) < 3:
+            return False
+            
+        # Shouldn't be a fragment
+        if sub_query.endswith(('in', 'of', 'for', 'with', 'and')):
+            return False
+            
+        return True
     
     def decompose_query(self, query: str) -> QueryDecompositionResult:
         detected_entities = self.entity_detector.detect_entities(query)
@@ -411,51 +580,293 @@ class QueryDecomposer:
     
     def _decompose_comparison(self, query: str, entities: Dict[str, List[DetectedEntity]]) -> List[str]:
         sub_queries = []
-        between_pattern = r'between\s+([^and]+?)\s+and\s+([^for\s]+)'
-        match = re.search(between_pattern, query, re.IGNORECASE)
-        if match:
-            first = match.group(1).strip()
-            second = match.group(2).strip()
-            sub_queries.append(f"{first}")
-            sub_queries.append(f"{second}")
-        return sub_queries
+        
+        # Extract technology entities (most reliable for comparisons)
+        tech_entities = [e.text for e in entities.get('technologies', [])]
+        
+        # Improved patterns for comparison detection
+        comparison_patterns = [
+            # "explain why X is better than Y"
+            r'(?:explain\s+why\s+|why\s+is\s+)?(\w+)\s+(?:is\s+)?better\s+than\s+(\w+)',
+            # "compare X and Y" or "compare X with Y"
+            r'compare\s+(\w+)\s+(?:and|with|vs|versus)\s+(\w+)',
+            # "X vs Y" or "X versus Y"
+            r'(\w+)\s+(?:vs|versus)\s+(\w+)',
+            # "difference between X and Y"
+            r'difference\s+between\s+(\w+)\s+and\s+(\w+)',
+            # "X and Y comparison"
+            r'(\w+)\s+and\s+(\w+)\s+comparison',
+            # "between X and Y"
+            r'between\s+(\w+)\s+and\s+(\w+)'
+        ]
+        
+        first_item = None
+        second_item = None
+        
+        # Try to match comparison patterns
+        for pattern in comparison_patterns:
+            match = re.search(pattern, query, re.IGNORECASE)
+            if match:
+                candidate1 = match.group(1).strip()
+                candidate2 = match.group(2).strip()
+                
+                # Validate that these are actual entities, not query words
+                if not self._is_common_word(candidate1) and not self._is_common_word(candidate2):
+                    first_item = candidate1
+                    second_item = candidate2
+                    break
+        
+        # Fallback: use technology entities if available
+        if not first_item and len(tech_entities) >= 2:
+            first_item = tech_entities[0]
+            second_item = tech_entities[1]
+        
+        # Generate meaningful comparison sub-queries
+        if first_item and second_item:
+            # Clean up the items (remove extra spaces, normalize)
+            first_item = re.sub(r'\s+', ' ', first_item).strip()
+            second_item = re.sub(r'\s+', ' ', second_item).strip()
+            
+            sub_queries = [
+                f"What are the key features and capabilities of {first_item}",
+                f"What are the key features and capabilities of {second_item}",
+                f"What are the technical specifications of {first_item}",
+                f"What are the technical specifications of {second_item}",
+                f"What are the advantages of {first_item}",
+                f"What are the advantages of {second_item}",
+                f"What are the disadvantages or limitations of {first_item}",
+                f"What are the disadvantages or limitations of {second_item}",
+                f"How does {first_item} compare to {second_item} in terms of performance",
+                f"Which is better between {first_item} and {second_item} and why"
+            ]
+        else:
+            # Fallback: generate general comparison queries based on detected entities
+            all_entities = []
+            for category in ['technologies', 'metrics']:
+                if category in entities:
+                    all_entities.extend([e.text for e in entities[category]])
+            
+            if all_entities:
+                main_entity = all_entities[0]
+                sub_queries = [
+                    f"What are the key characteristics of {main_entity}",
+                    f"What are the main benefits and advantages",
+                    f"What are the potential drawbacks or limitations",
+                    f"How does this compare to alternatives",
+                    f"What factors should be considered in evaluation"
+                ]
+            else:
+                # Last resort: generic comparison queries
+                sub_queries = [
+                    "What are the main items being compared",
+                    "What are the key differences to consider",
+                    "What are the advantages and disadvantages of each option",
+                    "What criteria should be used for comparison",
+                    "Which option is recommended and why"
+                ]
+        
+        return sub_queries[:8]  # Limit to 8 meaningful sub-queries
     
     def _decompose_list(self, query: str, entities: Dict[str, List[DetectedEntity]]) -> List[str]:
         sub_queries = []
-        separators = [' and ', ' & ', ', ']
-        for sep in separators:
-            if sep in query:
-                parts = query.split(sep)
-                for part in parts:
-                    part = part.strip()
-                    if part and part not in sub_queries:
-                        sub_queries.append(part)
-        return sub_queries
+        
+        # Extract list items from the query
+        list_patterns = [
+            r'(?:show|give|provide|list)\s+(?:me\s+)?([^.]+)',
+            r'([^,]+),\s*([^,]+),\s*(?:and\s+)?([^.]+)',
+            r'([^&]+)\s*&\s*([^&]+)',
+            r'([^and]+)\s+and\s+([^.]+)'
+        ]
+        
+        items = []
+        for pattern in list_patterns:
+            matches = re.findall(pattern, query, re.IGNORECASE)
+            if matches:
+                if isinstance(matches[0], tuple):
+                    items.extend([item.strip() for match in matches for item in match if item.strip()])
+                else:
+                    items.extend([match.strip() for match in matches])
+                break
+        
+        # If no patterns matched, try simple separation
+        if not items:
+            separators = [', ', ' and ', ' & ']
+            for sep in separators:
+                if sep in query:
+                    items = [part.strip() for part in query.split(sep)]
+                    break
+        
+        # Generate focused sub-queries for each item
+        action_words = ['show', 'give', 'provide', 'explain', 'describe', 'analyze']
+        base_action = 'explain'
+        
+        for word in action_words:
+            if word in query.lower():
+                base_action = word
+                break
+        
+        for item in items[:5]:  # Limit to 5 items
+            if item and len(item.split()) <= 10:  # Reasonable length check
+                sub_queries.append(f"What is {item}")
+                sub_queries.append(f"How does {item} work")
+                sub_queries.append(f"What are the benefits of {item}")
+        
+        # Add comparative sub-queries if multiple items
+        if len(items) >= 2:
+            sub_queries.append(f"How do {items[0]} and {items[1]} compare")
+            sub_queries.append(f"What are the relationships between {', '.join(items[:3])}")
+        
+        return sub_queries[:8]  # Limit to 8 sub-queries for lists
     
     def _decompose_by_entities(self, query: str, entities: Dict[str, List[DetectedEntity]]) -> List[str]:
         sub_queries = []
+        
+        # Extract main action/intent from query
+        action_patterns = [
+            r'(analyze|compare|show|explain|describe|evaluate|assess|examine)\s+(.+)',
+            r'what\s+(?:is|are)\s+(.+)',
+            r'how\s+(?:does|do|can)\s+(.+)',
+            r'why\s+(?:is|are|does|do)\s+(.+)'
+        ]
+        
+        main_intent = query
+        for pattern in action_patterns:
+            match = re.search(pattern, query, re.IGNORECASE)
+            if match:
+                main_intent = match.group(1) if len(match.groups()) == 1 else match.group(2)
+                break
+        
+        # Generate entity-specific sub-queries
         for category, entity_list in entities.items():
-            if len(entity_list) > 1 and category not in ['comparison_terms', 'list_terms']:
-                for entity in entity_list:
-                    modified_query = query.replace(entity.text, f"{entity.text} in {category}")
-                    sub_queries.append(modified_query)
-        return sub_queries if sub_queries else [query]
+            if category not in ['comparison_terms', 'list_terms'] and entity_list:
+                for entity in entity_list[:3]:  # Limit to 3 entities per category
+                    # Generate multiple perspectives for each entity
+                    sub_queries.append(f"What are the key features of {entity.text}")
+                    sub_queries.append(f"How does {entity.text} perform in {main_intent}")
+                    
+                    if category == 'locations':
+                        sub_queries.append(f"What are the specific conditions in {entity.text}")
+                    elif category == 'time_ranges':
+                        sub_queries.append(f"What trends occurred during {entity.text}")
+                    elif category == 'technologies':
+                        sub_queries.append(f"What are the technical specifications of {entity.text}")
+                    else:
+                        sub_queries.append(f"What is the significance of {entity.text} in this context")
+        
+        # Add cross-entity relationships if multiple categories
+        entity_categories = [cat for cat, ents in entities.items() if ents and cat not in ['comparison_terms', 'list_terms']]
+        if len(entity_categories) >= 2:
+            cat1_entities = [e.text for e in entities[entity_categories[0]][:2]]
+            cat2_entities = [e.text for e in entities[entity_categories[1]][:2]]
+            
+            for e1 in cat1_entities:
+                for e2 in cat2_entities:
+                    sub_queries.append(f"How does {e1} relate to {e2}")
+                    if len(sub_queries) >= 10:  # Prevent too many combinations
+                        break
+                if len(sub_queries) >= 10:
+                    break
+        
+        return sub_queries[:6] if sub_queries else [f"What are the main aspects of {main_intent}"]
     
     def _decompose_by_time(self, query: str, entities: Dict[str, List[DetectedEntity]]) -> List[str]:
         sub_queries = []
         time_entities = entities.get('time_ranges', [])
-        for time_entity in time_entities:
-            modified_query = query.replace(time_entity.text, f"{time_entity.text} time_period")
-            sub_queries.append(modified_query)
-        return sub_queries if sub_queries else [query]
+        
+        if time_entities:
+            for time_entity in time_entities:
+                # Generate time-specific sub-queries
+                sub_queries.append(f"What happened during {time_entity.text}")
+                sub_queries.append(f"What are the trends for {time_entity.text}")
+                sub_queries.append(f"How did conditions change during {time_entity.text}")
+        else:
+            # Generate general temporal sub-queries
+            sub_queries.append(f"What are the historical trends for {query}")
+            sub_queries.append(f"What are the current conditions for {query}")
+            sub_queries.append(f"What are the future projections for {query}")
+        
+        return sub_queries[:4]  # Limit to 4 time-based sub-queries
         
     def _decompose_by_space(self, query: str, entities: Dict[str, List[DetectedEntity]]) -> List[str]:
         sub_queries = []
         location_entities = entities.get('locations', [])
-        for location_entity in location_entities:
-            modified_query = query.replace(location_entity.text, f"{location_entity.text} location")
-            sub_queries.append(modified_query)
-        return sub_queries if sub_queries else [query]
+        
+        if location_entities:
+            for location_entity in location_entities:
+                # Generate location-specific sub-queries
+                sub_queries.append(f"What are the conditions in {location_entity.text}")
+                sub_queries.append(f"How does {location_entity.text} compare to other locations")
+                sub_queries.append(f"What are the specific challenges in {location_entity.text}")
+        else:
+            # Generate general spatial sub-queries
+            sub_queries.append(f"What are the regional variations for {query}")
+            sub_queries.append(f"How does location affect {query}")
+            sub_queries.append(f"What are the geographical considerations for {query}")
+        
+        return sub_queries[:4]  # Limit to 4 space-based sub-queries
+    
+    def _is_complex_query(self, query: str, entities: Dict[str, List[DetectedEntity]]) -> bool:
+        """Determine if a query is complex enough to warrant 5+ sub-queries."""
+        complexity_indicators = 0
+        
+        # Check for multiple entities
+        total_entities = sum(len(entity_list) for entity_list in entities.values())
+        if total_entities >= 3:
+            complexity_indicators += 1
+        
+        # Check for comparison keywords
+        comparison_words = ['compare', 'vs', 'versus', 'between', 'difference', 'contrast']
+        if any(word in query.lower() for word in comparison_words):
+            complexity_indicators += 1
+        
+        # Check for multiple aspects (and, &, comma-separated)
+        if ', ' in query or ' and ' in query or ' & ' in query:
+            complexity_indicators += 1
+        
+        # Check for analytical keywords
+        analytical_words = ['analyze', 'evaluate', 'assess', 'examine', 'investigate']
+        if any(word in query.lower() for word in analytical_words):
+            complexity_indicators += 1
+        
+        # Check query length (longer queries tend to be more complex)
+        if len(query.split()) >= 8:
+            complexity_indicators += 1
+        
+        return complexity_indicators >= 2
+    
+    def _generate_additional_queries(self, query: str, entities: Dict[str, List[DetectedEntity]], existing_queries: List[str]) -> List[str]:
+        """Generate additional sub-queries to reach the minimum of 5."""
+        additional_queries = []
+        
+        # Generate context-based questions
+        context_templates = [
+            f"What are the key benefits of {query}",
+            f"What are the challenges with {query}",
+            f"How can {query} be improved",
+            f"What are the alternatives to {query}",
+            f"What is the impact of {query}",
+            f"What are the requirements for {query}",
+            f"How does {query} work in practice",
+            f"What are the costs associated with {query}"
+        ]
+        
+        for template in context_templates:
+            if template not in existing_queries and len(additional_queries) < 5:
+                additional_queries.append(template)
+        
+        # Generate entity-based questions if we have entities
+        for category, entity_list in entities.items():
+            if entity_list and category not in ['comparison_terms', 'list_terms']:
+                for entity in entity_list[:2]:  # Limit to 2 entities per category
+                    additional_query = f"What role does {entity.text} play in {query}"
+                    if additional_query not in existing_queries and additional_query not in additional_queries:
+                        additional_queries.append(additional_query)
+                        if len(additional_queries) >= 5:
+                            break
+                if len(additional_queries) >= 5:
+                    break
+        
+        return additional_queries[:5]  # Return maximum 5 additional queries
         
     def _calculate_confidence_score(self, 
                                  entities: Dict[str, List[DetectedEntity]], 
@@ -818,38 +1229,61 @@ def interactive_demo():
     
     print("\n👋 Demo ended. Thanks for trying the Query Decomposer Agent!")
 
+def main():
+    """Main interactive function for testing the Query Decomposer Agent."""
+    print("Query Decomposer Agent - Interactive Mode")
+    print("=" * 70)
+    print("This tool helps break down complex queries into actionable sub-queries.")
+    print("Enter your query and see how it gets decomposed. Type 'quit' to exit.\n")
+
+    agent = QueryDecomposerAgent()
+
+    while True:
+        try:
+            query = input("🔍 Enter your query: ").strip()
+
+            if query.lower() in ['quit', 'exit', 'q']:
+                break
+
+            if not query:
+                continue
+
+            start_time = time.time()
+            result = agent.process_query(query)
+            processing_time = time.time() - start_time
+
+            print(f"\n✅ Results (processed in {processing_time:.2f}s):")
+            print(f"Original Query: {result.decomposition_result.original_query}")
+            print(f"Query Type: {result.decomposition_result.query_type.value}")
+            print(f"Confidence: {result.decomposition_result.confidence_score:.2f}")
+
+            print(f"\nGenerated Sub-queries ({len(result.decomposition_result.sub_queries)}):")
+            for i, sub_query in enumerate(result.decomposition_result.sub_queries, 1):
+                print(f"  {i}. {sub_query}")
+
+            # Show detected entities if any
+            if any(result.decomposition_result.detected_entities.values()):
+                print("\n🔎 Detected Entities:")
+                for category, entities in result.decomposition_result.detected_entities.items():
+                    if entities:
+                        print(f"  - {category}: {', '.join(e.text for e in entities[:3])}" +
+                              ("..." if len(entities) > 3 else ""))
+
+            print("\n" + "=" * 70 + "\n")
+
+        except KeyboardInterrupt:
+            print("\n👋 Exiting...")
+            break
+        except Exception as e:
+            print(f"\n❌ Error: {str(e)}")
+            print("\nTroubleshooting tips:")
+            print("1. Try simplifying your query")
+            print("2. Check for special characters that might cause issues")
+            print("3. Rephrase your query if it's very complex")
+            print("=" * 70 + "\n")
+
+    print("Thank you for using the Query Decomposer Agent!")
+    print("=" * 70)
+
 if __name__ == "__main__":
-    print("Query Decomposer Agent - Enhanced Decomposition (5+ Sub-queries) & RAG Integration Ready")
-    print("=" * 80)
-    
-    print("\n1. Enhanced Decomposition Test (5+ Sub-queries):")
-    test_enhanced_decomposition()
-    
-    print("\n2. Dynamic Decomposition Test:")
-    test_dynamic_decomposition()
-    
-    print("\n3. RAG Integration Demo:")
-    demo_rag_integration()
-    
-    print("\n4. Basic Usage:")
-    result = process_single_query("Compare network latency between 4G and 5G in Bangalore for last 3 months")
-    print(f"Original: {result.decomposition_result.original_query}")
-    print(f"Sub-queries: {result.decomposition_result.sub_queries}")
-    print(f"Query Type: {result.decomposition_result.query_type.value}")
-    print(f"Confidence: {result.decomposition_result.confidence_score:.2f}")
-    
-    print("\n5. Interactive Demo:")
-    try:
-        interactive_demo()
-    except:
-        print("Interactive demo skipped (non-interactive environment)")
-    
-    print("\n" + "=" * 80)
-    print("🎯 IMPLEMENTATION GUIDE:")
-    print("1. Replace placeholder functions with your actual implementations")
-    print("2. Set up your input/output file paths as indicated")
-    print("3. Configure your retriever and LLM integrations")
-    print("4. Test with your domain-specific entities and queries")
-    print("5. The agent generates 5+ sub-queries based on query complexity")
-    print("6. Enhanced with multiple decomposition strategies for maximum coverage")
-    print("=" * 80)
+    main()
