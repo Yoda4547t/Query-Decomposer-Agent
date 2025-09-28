@@ -1,0 +1,4 @@
+# Minimal dependencies to run the LLM-based decomposer
+# Rule-based agent needs only the Python standard library
+
+requests>=2.31.0

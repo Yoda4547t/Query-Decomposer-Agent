@@ -56,21 +56,30 @@ Both decomposers are specifically designed to work with RAG AI systems where:
 
 ### Installation
 
-1. Clone the repository:
    ```bash
    git clone https://github.com/Yoda4547t/Query-Decomposer-Agent.git
    cd Query-Decomposer-Agent
    ```
 
-2. Install required dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-   
-   For LLM-based decomposer, also install:
-   ```bash
-   pip install requests langchain-community
-   ```
+2. Install dependencies (choose one path):
+
+   - **Rule-based only (no external deps):** skip installs
+
+   - **LLM-based (minimal):**
+     ```bash
+     pip install -r requirements-min.txt
+     ```
+
+   - **LLM-based + RAG features (vector search):**
+     ```bash
+     pip install -r requirements-rag.txt
+     ```
+
+   - Alternatively, the legacy bundle remains available:
+     ```bash
+     pip install -r requirements.txt
+     ```
+     This installs LangChain + Ollama integrations and is larger than the minimal set.
 
 3. (For LLM-based) Pull the desired model (e.g., LLaMA 3):
    ```bash
@@ -95,9 +104,10 @@ To keep dependencies isolated, use a per-project virtual environment.
 - **Install dependencies into this venv**
   ```powershell
   python -m pip install --upgrade pip
-  pip install -r requirements.txt
-  # For the LLM agent specifically (if not in requirements.txt):
-  pip install requests langchain-community
+  # Choose one of the following depending on your needs
+  pip install -r requirements-min.txt        # LLM-based minimal
+  # pip install -r requirements-rag.txt      # LLM + RAG
+  # pip install -r requirements.txt          # Legacy full bundle
   ```
 
 - **Run the agents**

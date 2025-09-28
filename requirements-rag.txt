@@ -1,0 +1,6 @@
+# Optional dependencies for RAG features
+# Install these IN ADDITION to requirements-min.txt when using RAGDecomposer
+
+requests>=2.31.0
+langchain-community>=0.0.20
+faiss-cpu>=1.7.4
