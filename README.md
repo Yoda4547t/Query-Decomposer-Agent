@@ -77,6 +77,56 @@ Both decomposers are specifically designed to work with RAG AI systems where:
    ollama pull llama3:8b
    ```
 
+## Using a virtual environment (.venv) on Windows
+
+To keep dependencies isolated, use a per-project virtual environment.
+
+- **Create and activate (.venv) in PowerShell**
+  ```powershell
+  python -m venv .venv
+  .\.venv\Scripts\Activate.ps1
+  ```
+  If activation is blocked, allow scripts for the current session:
+  ```powershell
+  Set-ExecutionPolicy -Scope Process RemoteSigned
+  .\.venv\Scripts\Activate.ps1
+  ```
+
+- **Install dependencies into this venv**
+  ```powershell
+  python -m pip install --upgrade pip
+  pip install -r requirements.txt
+  # For the LLM agent specifically (if not in requirements.txt):
+  pip install requests langchain-community
+  ```
+
+- **Run the agents**
+  ```powershell
+  # Rule-based interactive demo
+  python -c "from query_decomposer_agent import interactive_demo; interactive_demo()"
+
+  # LLM-based agent (Ollama must be running: `ollama serve`)
+  python query_decomposer_llm_agent.py --model llama3:8b
+  ```
+
+- **Deactivate and re-activate later**
+  ```powershell
+  deactivate
+  .\.venv\Scripts\Activate.ps1
+  ```
+
+- **Troubleshooting**
+  - Ensure you’re using the same Python for pip and execution:
+    ```powershell
+    where python
+    python -c "import sys; print(sys.executable)"
+    python -m pip -V
+    ```
+  - If `requests` is not found in the LLM agent:
+    ```powershell
+    python -m pip install requests
+    ```
+
 ## Quick Start
 
 ### LLM-based Decomposer
