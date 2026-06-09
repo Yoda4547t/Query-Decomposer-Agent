@@ -244,6 +244,13 @@ from query_decomposer_agent import QueryDecomposerAgent, demo_rag_integration
 # Run the complete RAG integration demo
 demo_rag_integration()
 ```
+## Working Screenshots
+### Example 1: Rule Based Screenshot
+<img width="1343" height="1134" alt="image" src="https://github.com/user-attachments/assets/55dd85cb-41cf-4892-bc31-1c8c2686180f" />
+
+### Example 2: LLM Based Screenshot
+<img width="1343" height="1134" alt="image" src="https://github.com/user-attachments/assets/e8fce863-aa4c-4615-b439-79370c106983" />
+
 
 ## 🎮 Interactive Demo
 
