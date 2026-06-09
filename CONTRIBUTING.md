@@ -1,4 +1,4 @@
-# Contributing to Query Decomposer Agent
+# Contributing to Query Decomposer 
 
 Thank you for your interest in contributing to the Query Decomposer Agent! This document provides guidelines and information for contributors.
 
